@@ -1,5 +1,4 @@
-import ScamAnalyzer from "D:/Neha/College/Hackathons/ShieldUp/frontend/pages/ScamAnalyzer";
-
+import ScamAnalyzer from "./pages/ScamAnalyzer";
 function App() {
   return (
     <div>

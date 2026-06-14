@@ -393,7 +393,42 @@ export const SIMULATOR_SCENARIOS = [
       }
     ],
     redFlagsExplanation: "This alert relies on high urgency and redirects users to a malicious credentials harvesting portal mimicking SBI's blocking interface."
-  }
+  },
+  {
+  id: "scen-delivery",
+  title: "Package Delivery Failed",
+  type: "Delivery Scam",
+
+  introText:
+    "Courier company claims your parcel cannot be delivered.",
+
+  messageText:
+    "Your package delivery failed. Pay ₹50 re-delivery fee immediately at http://india-post-delivery-fix.net",
+
+  choices: ["Safe", "Suspicious", "Scam"],
+
+  correctChoice: "Scam",
+
+  hotspots: [
+    {
+      text: "₹50 re-delivery fee",
+      flagged: true,
+      label: "Payment Request",
+      explanation:
+        "Small charges are often used to steal card information."
+    },
+    {
+      text: "http://india-post-delivery-fix.net",
+      flagged: true,
+      label: "Fake Domain",
+      explanation:
+        "Not an official India Post website."
+    }
+  ],
+
+  redFlagsExplanation:
+    "Fake delivery scams commonly use small payment requests and fake courier websites."
+}
 ];
 
 // 7. Scammer Chat Simulations (Mode B - Interactive Chatbot States)
@@ -508,6 +543,112 @@ export const CHAT_SCENARIOS = {
       }
     }
   }
+  ,
+upi_support: {
+  character: "UPI Customer Support Executive",
+  avatar: "💸",
+  initialMsg:
+    "Hello sir, we noticed a failed refund of ₹2,500 to your UPI account. Would you like us to process it immediately?",
+
+  techniques: [
+    "Refund Scam",
+    "Social Engineering",
+    "UPI Collection Request"
+  ],
+
+  dialogFlow: {
+    start: {
+      botReply:
+        "We noticed a failed refund of ₹2,500 to your account. Would you like us to process it immediately?",
+
+      options: [
+        {
+          text: "Yes, please process it.",
+          nextState: "collect_request"
+        },
+
+        {
+          text: "Which company are you calling from?",
+          nextState: "suspicious"
+        },
+
+        {
+          text: "I never requested a refund.",
+          nextState: "safe_end"
+        }
+      ]
+    },
+
+    collect_request: {
+      botReply:
+        "To receive the refund, please accept the UPI request that will appear on your phone.",
+
+      options: [
+        {
+          text: "Accepted the request.",
+          nextState: "fail_end"
+        },
+
+        {
+          text: "Refunds should not require payment approval.",
+          nextState: "safe_end"
+        }
+      ]
+    },
+
+    suspicious: {
+      botReply:
+        "Sir, this is an urgent system-generated refund. Please accept the UPI request quickly or the refund will expire.",
+
+      options: [
+        {
+          text: "Okay, send it.",
+          nextState: "fail_end"
+        },
+
+        {
+          text: "This sounds suspicious.",
+          nextState: "safe_end"
+        }
+      ]
+    },
+
+    fail_end: {
+      botReply:
+        "SCAM SUCCESSFUL. The UPI request actually debited money from your account.",
+
+      isEnd: true,
+
+      rating: "Vulnerable",
+
+      tacticsIdentified: [
+        "Refund Scam",
+        "Fake Support Agent",
+        "UPI Collection Request"
+      ],
+
+      xpEarned: 10
+    },
+
+    safe_end: {
+      botReply:
+        "Excellent! You identified the scam. Genuine refunds never require accepting a payment request.",
+
+      isEnd: true,
+
+      rating: "Cyber Defender",
+
+      tacticsIdentified: [
+        "Refund Scam",
+        "Urgency Tactic",
+        "UPI Fraud"
+      ],
+
+      xpEarned: 100
+    }
+  }
+}
+
 };
 
 // 8. Achievements List

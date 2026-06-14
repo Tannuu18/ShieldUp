@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { SCREENSHOT_TEMPLATES } from '../mockData';
+import { SCREENSHOT_TEMPLATES } from '../utils/mockData';
 import { Camera, ShieldAlert, Zap, AlertTriangle, Eye, Sparkles } from 'lucide-react';
 
 export default function ScreenshotDetector() {

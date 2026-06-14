@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { EMERGENCY_PLAYBOOKS } from '../mockData';
+import { EMERGENCY_PLAYBOOKS } from '../utils/mockData';
 import { ShieldAlert, Send, ArrowRight, CornerDownRight, CheckCircle2, RotateCcw } from 'lucide-react';
 
 export default function EmergencyAssistant() {
@@ -14,6 +14,7 @@ export default function EmergencyAssistant() {
   const [inputText, setInputText] = useState('');
   const [activePlaybook, setActivePlaybook] = useState(null);
   const [completedSteps, setCompletedSteps] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const handleSelectScenario = (key) => {
     const playbook = EMERGENCY_PLAYBOOKS[key];
@@ -33,35 +34,68 @@ export default function EmergencyAssistant() {
     setCompletedSteps({});
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || loading) return;
 
     const userText = inputText.trim();
-    const userMsg = { sender: 'user', text: userText };
+    const userMsg = { sender: 'user', text: userText, time: new Date().toLocaleTimeString() };
+    setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+    setLoading(true);
 
-    let botText = "I understand you are experiencing a security issue. Let's start with basic containment: \n1. Disconnect your device from the internet (Wi-Fi/LAN).\n2. Do not log in or type credentials on suspect pages.\n3. Enable Multi-Factor Authentication on your primary email address.\n\nCould you specify if this involves a password breach, malware download, or banking transaction fraud so I can give specific details?";
-    let playbookKey = null;
+    try {
+      let response;
+      try {
+        response = await fetch('http://localhost:8000/emergency-copilot', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: userText })
+        });
+      } catch (err) {
+        // Fallback relative path
+        response = await fetch('/emergency-copilot', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: userText })
+        });
+      }
 
-    const lower = userText.toLowerCase();
-    if (lower.includes("link") || lower.includes("click") || lower.includes("phish") || lower.includes("website")) {
-      botText = "It looks like you clicked a suspicious link. I have loaded the Phishing Link containment guide below. Follow these steps immediately:";
-      playbookKey = "phishing_link";
-    } else if (lower.includes("hack") || lower.includes("instagram") || lower.includes("whatsapp") || lower.includes("account")) {
-      botText = "It looks like your social media account might be compromised. I have loaded the Hacked Accounts containment guide below. Follow these steps immediately:";
-      playbookKey = "hacked_socials";
-    } else if (lower.includes("download") || lower.includes("file") || lower.includes("exe") || lower.includes("malware") || lower.includes("virus")) {
-      botText = "It looks like you downloaded a suspect file. I have loaded the Malware Containment guide below. Follow these steps immediately:";
-      playbookKey = "malware_download";
-    }
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
 
-    const botMsg = { sender: 'bot', text: botText, playbookKey };
-    setMessages((prev) => [...prev, userMsg, botMsg]);
+      const data = await response.json();
+      const botMsg = { 
+        sender: 'bot', 
+        text: data.analysis.reply, 
+        time: new Date().toLocaleTimeString() 
+      };
+      setMessages((prev) => [...prev, botMsg]);
 
-    if (playbookKey) {
-      setActivePlaybook(EMERGENCY_PLAYBOOKS[playbookKey]);
-      setCompletedSteps({});
+      if (data.analysis.steps && data.analysis.steps.length > 0) {
+        const customPlaybook = {
+          title: "AI Containment checklist",
+          subtitle: data.analysis.reply,
+          steps: data.analysis.steps
+        };
+        setActivePlaybook(customPlaybook);
+        setCompletedSteps({});
+      }
+    } catch (err) {
+      console.error(err);
+      const botMsg = { 
+        sender: 'bot', 
+        text: "I experienced a connection issue, but here is immediate advice: Disconnect from Wi-Fi/data networks immediately. Do not share codes, credentials, or make payments. Change keys on another device.",
+        time: new Date().toLocaleTimeString()
+      };
+      setMessages((prev) => [...prev, botMsg]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -153,6 +187,17 @@ export default function EmergencyAssistant() {
                 </div>
               </div>
             ))}
+
+            {/* Typing Indicator */}
+            {loading && (
+              <div className="flex justify-start animate-pulse">
+                <div className="bg-cyber-lightGray/70 border border-cyber-border/40 rounded-xl rounded-tl-none p-3.5 flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyber-purple animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyber-purple animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyber-purple animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Chat input form */}
@@ -160,13 +205,14 @@ export default function EmergencyAssistant() {
             <input
               type="text"
               className="flex-1 bg-cyber-gray border border-cyber-border/80 rounded-lg px-4 py-2.5 text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:border-cyber-cyan transition-all"
-              placeholder="Describe your cyber emergency here..."
+              placeholder={loading ? "Generating checklist response..." : "Describe your cyber emergency here..."}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              disabled={loading}
             />
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || loading}
               className="p-2.5 bg-cyber-cyan text-cyber-black rounded-lg hover:shadow-glow-cyan active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <Send className="w-4 h-4" />

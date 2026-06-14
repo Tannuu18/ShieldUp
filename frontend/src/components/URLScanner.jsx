@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { MOCK_URLS } from '../mockData';
 import { Shield, ShieldAlert, ShieldCheck, Globe, Key, AlertTriangle, Info, Search } from 'lucide-react';
 
 export default function URLScanner() {
   const [urlInput, setUrlInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const getDomainName = (input) => {
     let clean = input.trim().toLowerCase();
@@ -18,103 +18,148 @@ export default function URLScanner() {
     return clean;
   };
 
+  const parseAIResponse = (text, domain) => {
+    let riskLevel = "Medium";
+    let riskScore = 50;
+    let reasons = [];
+    let recommendation = "";
+
+    const lines = text.split('\n');
+    let currentSection = ""; // "level", "score", "reasons", "rec"
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      const lower = trimmed.toLowerCase();
+
+      // Check section transitions
+      if (lower.includes("risk level") || (lower.includes("level") && lower.includes("risk"))) {
+        currentSection = "level";
+      } else if (lower.includes("risk score") || (lower.includes("score") && lower.includes("risk"))) {
+        currentSection = "score";
+      } else if (lower.includes("reasons") || lower.includes("reason")) {
+        currentSection = "reasons";
+        return; // Skip reading this header line as a reason
+      } else if (lower.includes("recommendation") || lower.includes("recommendations")) {
+        currentSection = "rec";
+        return; // Skip reading this header line as recommendation
+      }
+
+      // Parse values based on current section
+      const cleanContent = trimmed.replace(/^[-*•\d\.\:\s\*]+/, '').trim();
+      
+      if (currentSection === "level") {
+        const match = trimmed.match(/(?:level|risk)\s*:\s*(\w+)/i) || trimmed.match(/(\w+)\s+risk/i);
+        if (match && match[1]) {
+          riskLevel = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        } else {
+          if (lower.includes("high") || lower.includes("critical")) riskLevel = "High";
+          else if (lower.includes("medium")) riskLevel = "Medium";
+          else if (lower.includes("low")) riskLevel = "Low";
+          else if (lower.includes("safe") || lower.includes("clean")) riskLevel = "Safe";
+        }
+      } else if (currentSection === "score") {
+        const match = trimmed.match(/\b(\d+)\b/);
+        if (match && match[1]) {
+          riskScore = parseInt(match[1], 10);
+        }
+      } else if (currentSection === "reasons") {
+        const item = trimmed.replace(/^[-*•\d\.\s]+/, '').trim();
+        if (item && item.length > 5 && !item.toLowerCase().includes("reasons")) {
+          reasons.push(item);
+        }
+      } else if (currentSection === "rec") {
+        const item = trimmed.replace(/^[-*•\d\.\s]+/, '').trim();
+        if (item && !item.toLowerCase().includes("recommendation")) {
+          if (recommendation) {
+            recommendation += " " + item;
+          } else {
+            recommendation = item;
+          }
+        }
+      }
+    });
+
+    if (reasons.length === 0) {
+      // Fallback: extract list items manually if section headings weren't caught
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
+          const item = trimmed.replace(/^[-*•\s]+/, '').trim();
+          if (item) reasons.push(item);
+        }
+      });
+    }
+
+    if (isNaN(riskScore) || riskScore < 0 || riskScore > 100) {
+      riskScore = riskLevel === "High" ? 85 : riskLevel === "Medium" ? 45 : 12;
+    }
+
+    return {
+      domain,
+      riskScore,
+      riskLevel,
+      reasons: reasons.length > 0 ? reasons : ["Analyzed by CyberShield AI."],
+      recommendation: recommendation || "Avoid clicking or sharing details unless verified through official communication channels.",
+      rawText: text
+    };
+  };
+
   const scanURL = async () => {
     if (!urlInput.trim()) return;
     setLoading(true);
-
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setResult(null);
+    setErrorMsg('');
 
     const domain = getDomainName(urlInput);
 
-    // 1. Check mock database first
-    if (MOCK_URLS[domain]) {
-      setResult(MOCK_URLS[domain]);
-      setLoading(false);
-      return;
-    }
-
-    // 2. Fallback Dynamic Heuristics Generator
-    const brandKeywords = [
-      { name: "Netflix", keys: ["netflix", "netflix-billing", "netflix-update"] },
-      { name: "Chase Bank", keys: ["chase", "chase-online", "chase-bank"] },
-      { name: "ICICI Bank", keys: ["icici", "icicibank", "icici-security"] },
-      { name: "SBI Bank", keys: ["sbi", "onlinesbi", "sbi-card"] },
-      { name: "Amazon", keys: ["amazon", "amzn", "amazon-refund"] },
-      { name: "FedEx", keys: ["fedex", "fedex-clearance", "fedex-clear"] },
-      { name: "PayPal", keys: ["paypal", "paypal-service"] }
-    ];
-
-    let riskScore = 15;
-    const reasons = [];
-    let detectedBrand = null;
-    const isIpAddress = /^[0-9.]+$/.test(domain);
-
-    // Check if domain matches any brand keyword but isn't official
-    for (const b of brandKeywords) {
-      const matchesKeyword = b.keys.some(k => domain.includes(k));
-      const isOfficial = (b.name === "Amazon" && (domain === "amazon.in" || domain === "amazon.com")) ||
-                         (b.name === "Netflix" && domain === "netflix.com") ||
-                         (b.name === "Chase Bank" && domain === "chase.com") ||
-                         (b.name === "PayPal" && domain === "paypal.com");
-                         
-      if (matchesKeyword && !isOfficial) {
-        detectedBrand = b.name;
-        riskScore = 85;
-        reasons.push(`Domain mimics official trademark brand: '${b.name}'.`);
-        break;
+    try {
+      let response;
+      try {
+        response = await fetch('http://localhost:8000/scan-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: urlInput })
+        });
+      } catch (e) {
+        // Fallback relative path
+        response = await fetch('/scan-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: urlInput })
+        });
       }
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const parsed = parseAIResponse(data.analysis, domain);
+      setResult(parsed);
+      
+      // Save stats
+      if (parsed.riskScore >= 50) {
+        const totalScams = parseInt(localStorage.getItem('cybershield_scams_detected') || '0', 10);
+        localStorage.setItem('cybershield_scams_detected', (totalScams + 1).toString());
+      }
+    } catch (err) {
+      console.error("URL scan failed", err);
+      setErrorMsg("Failed to connect to the backend API. Please make sure the FastAPI server is running on http://localhost:8000.");
+    } finally {
+      setLoading(false);
     }
-
-    if (domain.includes("verify") || domain.includes("login") || domain.includes("update") || domain.includes("refund") || domain.includes("security")) {
-      riskScore = Math.max(riskScore, 75);
-      reasons.push("URL contains high-urgency words ('verify', 'login', 'update').");
-    }
-
-    const tld = domain.split('.').pop();
-    const highRiskTlds = ["info", "xyz", "top", "cf", "gq", "ml", "tk", "cc", "icu"];
-    if (highRiskTlds.includes(tld)) {
-      riskScore = Math.max(riskScore, 65);
-      reasons.push(`Uses high-risk TLD (.${tld}) frequently used by temporary phishing campaigns.`);
-    }
-
-    if (isIpAddress) {
-      riskScore = 95;
-      reasons.push("URL uses a raw IP address instead of a standard hostname. Major brands never expose raw IPs to customers.");
-    }
-
-    if (reasons.length === 0) {
-      // Safe random score
-      riskScore = Math.floor(Math.random() * 25) + 10;
-      reasons.push("No brand impersonation or malicious keywords found.");
-      reasons.push("Domain exhibits standard registrar and SSL metrics.");
-    } else {
-      reasons.push("Using a short-lifetime free SSL certificate.");
-      reasons.push("WHOIS registrant details are anonymized via privacy proxy services.");
-    }
-
-    const mockResult = {
-      domain,
-      riskScore,
-      domainAge: riskScore > 60 ? `${Math.floor(Math.random() * 20) + 1} days` : `${Math.floor(Math.random() * 10) + 2} years`,
-      sslValid: riskScore < 90,
-      sslIssuer: riskScore > 60 ? "Let's Encrypt (Free DV)" : "DigiCert high-assurance CA",
-      whois: {
-        registrar: riskScore > 60 ? "Namecheap Inc." : "MarkMonitor Inc.",
-        registrantCountry: riskScore > 60 ? "IS" : "US",
-        creationDate: riskScore > 60 ? "2026-06-05" : "2012-05-18",
-        expiryDate: "2027-06-05"
-      },
-      threatDatabaseFlags: riskScore > 75 ? ["Reported in crowd-sourced blocklists"] : [],
-      reasons
-    };
-
-    setResult(mockResult);
-    setLoading(false);
   };
 
   const selectPreset = (domain) => {
     setUrlInput(domain);
     setResult(null);
+    setErrorMsg('');
   };
 
   const getScoreColor = (score) => {
@@ -206,6 +251,15 @@ export default function URLScanner() {
 
         {/* Right Details Pane */}
         <div className="lg:col-span-1">
+          {errorMsg && (
+            <Card className="border-cyber-red border-t-4 bg-cyber-red/10 p-5 space-y-3">
+              <div className="flex items-center gap-2 text-cyber-red font-bold text-sm">
+                <ShieldAlert className="w-5 h-5" /> Connection Failed
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed font-sans">{errorMsg}</p>
+            </Card>
+          )}
+
           {result ? (
             <Card className="space-y-6 h-full flex flex-col justify-between">
               <div>
@@ -225,16 +279,16 @@ export default function URLScanner() {
                 <div className="grid grid-cols-2 gap-3 text-xs mb-6">
                   <div className="p-3 bg-cyber-black/40 border border-cyber-border/30 rounded-lg flex flex-col justify-between">
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                      <Globe className="w-3.5 h-3.5 text-cyber-cyan" /> Domain Age
+                      <Globe className="w-3.5 h-3.5 text-cyber-cyan" /> Risk Level
                     </div>
-                    <span className="font-semibold text-white mt-1.5">{result.domainAge}</span>
+                    <span className={`font-semibold mt-1.5 ${getScoreColor(result.riskScore)}`}>{result.riskLevel}</span>
                   </div>
                   <div className="p-3 bg-cyber-black/40 border border-cyber-border/30 rounded-lg flex flex-col justify-between">
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                      <Key className="w-3.5 h-3.5 text-cyber-purple" /> SSL Status
+                      <Key className="w-3.5 h-3.5 text-cyber-purple" /> Status
                     </div>
-                    <span className={`font-semibold mt-1.5 truncate ${result.sslValid ? 'text-cyber-green' : 'text-cyber-red'}`}>
-                      {result.sslValid ? 'Valid' : 'Expired/Unsecure'}
+                    <span className={`font-semibold mt-1.5 ${result.riskScore >= 50 ? 'text-cyber-red' : 'text-cyber-green'}`}>
+                      {result.riskScore >= 50 ? 'Suspicious' : 'Clean / Safe'}
                     </span>
                   </div>
                 </div>
@@ -253,47 +307,43 @@ export default function URLScanner() {
                     </ul>
                   </div>
 
-                  {result.threatDatabaseFlags.length > 0 && (
-                    <div className="mt-4 p-2.5 border border-cyber-red/20 bg-cyber-red/5 rounded-lg">
-                      <div className="text-[10px] font-bold text-cyber-red uppercase flex items-center gap-1">
-                        <ShieldAlert className="w-3.5 h-3.5" /> Security Blocklists
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        Flagged in: {result.threatDatabaseFlags.join(', ')}
-                      </p>
+                  {/* Complete Raw AI Analysis box */}
+                  <div className="mt-6 pt-4 border-t border-cyber-border/30">
+                    <h4 className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Complete AI Report</h4>
+                    <div className="p-3 bg-cyber-black/50 border border-cyber-border/40 rounded-lg max-h-36 overflow-y-auto">
+                      <pre className="text-[10px] text-gray-400 font-sans whitespace-pre-wrap leading-relaxed">{result.rawText}</pre>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
-              {/* Technical breakdown banner */}
+              {/* Recommendation banner */}
               <div className="border-t border-cyber-border/30 pt-4 mt-6">
                 <div className="p-3 bg-cyber-lightGray/30 rounded-lg flex gap-2.5">
                   <Info className="w-4 h-4 text-cyber-cyan shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase">WHOIS Record Metadata</span>
-                    <div className="text-[10px] font-mono text-gray-400 space-y-0.5 mt-1">
-                      <div>Registrar: {result.whois.registrar}</div>
-                      <div>Country: {result.whois.registrantCountry}</div>
-                      <div>Created: {result.whois.creationDate}</div>
-                    </div>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">AI Recommendation</span>
+                    <p className="text-xs text-gray-300 leading-relaxed mt-1">{result.recommendation}</p>
                   </div>
                 </div>
               </div>
             </Card>
           ) : (
-            <Card className="h-full border-dashed border-cyber-border/60 flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
-              <div className="w-16 h-16 rounded-full bg-cyber-lightGray/50 border border-cyber-border/60 flex items-center justify-center text-gray-500 mb-4 animate-pulse">
-                <Shield className="w-6 h-6 text-cyber-purple" />
-              </div>
-              <h4 className="text-sm font-bold text-gray-300">Scanner Idle</h4>
-              <p className="text-xs text-gray-500 max-w-xs mt-1.5">
-                Paste a suspicious URL in the input field to parse SSL registries, WHOIS dates, and trademark impersonation alerts.
-              </p>
-            </Card>
+            !errorMsg && (
+              <Card className="h-full border-dashed border-cyber-border/60 flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
+                <div className="w-16 h-16 rounded-full bg-cyber-lightGray/50 border border-cyber-border/60 flex items-center justify-center text-gray-500 mb-4 animate-pulse">
+                  <Shield className="w-6 h-6 text-cyber-purple" />
+                </div>
+                <h4 className="text-sm font-bold text-gray-300">Scanner Idle</h4>
+                <p className="text-xs text-gray-500 max-w-xs mt-1.5">
+                  Paste a suspicious URL in the input field to parse SSL registries, WHOIS dates, and trademark impersonation alerts via the Gemini-powered backend.
+                </p>
+              </Card>
+            )
           )}
         </div>
       </div>
     </div>
   );
 }
+

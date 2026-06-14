@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { SIMULATOR_SCENARIOS, CHAT_SCENARIOS } from '../mockData';
-import { generateScammerResponse } from '../gemini';
+import { SIMULATOR_SCENARIOS, CHAT_SCENARIOS } from '../utils/mockData';
+import { generateScammerResponse } from '../utils/gemini';
 import { Award, Zap, ShieldAlert, CheckCircle, BrainCircuit, MessageSquare, AlertTriangle, Send, RefreshCw } from 'lucide-react';
 
 export default function ScamSimulator() {

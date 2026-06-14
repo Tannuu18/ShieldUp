@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import Dashboard from './utils/components/Dashboard.jsx';
-import MessageAnalyzer from './utils/components/MessageAnalyzer.jsx';
-import URLScanner from './utils/components/URLScanner.jsx';
-import ScreenshotDetector from './utils/components/ScreenshotDetector.jsx';
-import QRCodeScanner from './utils/components/QRCodeScanner.jsx';
-import EmergencyAssistant from './utils/components/EmergencyAssistant.jsx';
-import HealthAdvisor from './utils/components/HealthAdvisor.jsx';
-import ScamSimulator from './utils/components/ScamSimulator.jsx';
-import Achievements from './utils/components/Achievements.jsx';
-import Settings from './utils/components/Settings.jsx';
-import GlowEffect from './utils/components/Shared/GlowEffect.jsx';
+import Dashboard from './components/Dashboard';
+import MessageAnalyzer from './components/MessageAnalyzer';
+import URLScanner from './components/URLScanner';
+import ScreenshotDetector from './components/ScreenshotDetector';
+import QRCodeScanner from './components/QRCodeScanner';
+import EmergencyAssistant from './components/EmergencyAssistant';
+import HealthAdvisor from './components/HealthAdvisor';
+import ScamSimulator from './components/ScamSimulator';
+import Achievements from './components/Achievements';
+import Settings from './components/Settings';
+import GlowEffect from './components/Shared/GlowEffect';
 import { 
   Shield, LayoutDashboard, Terminal, Globe, Camera, 
   QrCode, ShieldAlert, Activity, Gamepad2, Award, 
@@ -149,7 +149,7 @@ export default function App() {
               <Shield className="w-4.5 h-4.5 text-cyber-black" />
             </div>
             <h1 className="text-sm font-extrabold tracking-wider text-white uppercase m-0 leading-none">
-              CyberShield
+              ShieldUp
             </h1>
           </div>
           <button 

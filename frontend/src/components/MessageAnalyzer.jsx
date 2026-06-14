@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { MESSAGE_SAMPLES } from '../mockData';
-import { analyzeMessageWithGemini } from '../gemini';
+import { MESSAGE_SAMPLES } from '../utils/mockData';
+import { analyzeMessageWithGemini } from '../utils/gemini';
 import { AlertTriangle, CheckCircle, ShieldAlert, Sparkles, HelpCircle } from 'lucide-react';
 
 export default function MessageAnalyzer() {
@@ -11,76 +11,34 @@ export default function MessageAnalyzer() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // Core heuristics scanner used when no Gemini Key is set
-  const runLocalHeuristics = (text) => {
-    const lower = text.toLowerCase();
-    const indicators = [];
-    let risk = "Low";
-    let type = "Legitimate Notification";
-    let explanation = "";
+  const parseJSONFromText = (text) => {
+    try {
+      // 1. Direct parsing
+      return JSON.parse(text.trim());
+    } catch (e) {
+      // 2. Try parsing contents between ```json and ``` block
+      const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        try {
+          return JSON.parse(match[1].trim());
+        } catch (e2) {
+          console.warn("Regex markdown block parse failed", e2);
+        }
+      }
 
-    // 1. Check for known sample exact match (or close match)
-    const matchedSample = MESSAGE_SAMPLES.find(s => 
-      lower.includes(s.text.substring(0, 40).toLowerCase())
-    );
-    if (matchedSample) {
-      return matchedSample;
+      // 3. Fallback: Parse string by finding bounding brackets
+      const startIndex = text.indexOf('{');
+      const endIndex = text.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        try {
+          return JSON.parse(text.substring(startIndex, endIndex + 1));
+        } catch (e3) {
+          console.warn("Index-based extraction parse failed", e3);
+        }
+      }
+
+      throw new Error("Could not parse JSON content from backend response.");
     }
-
-    // 2. Keyword Heuristics
-    const hasUrgency = /\b(immediate|immediately|minutes|hours|urgent|blocking|blocked|suspended|freeze|expires|now|action required)\b/.test(lower);
-    const hasLink = /https?:\/\/[^\s]+/.test(lower) || /t\.me\/|bit\.ly/i.test(lower);
-    const hasOTP = /\b(otp|one time password|pin|passcode|verify code|verification code)\b/.test(lower);
-    const hasMoney = /\b(inr|rs\.?|₹|usd|\$|pay|refund|earned|earning|invest|investment|double|profit|daily)\b/.test(lower);
-    const hasJob = /\b(job|salary|intern|internship|part-time|work from home|hr executive|recruiter|TechRecruit)\b/.test(lower);
-    const hasCourier = /\b(courier|customs|delivery|package|post|fedex|dhl|on hold)\b/.test(lower);
-
-    if (hasUrgency) indicators.push("Urgency Tactic (Time Pressure)");
-    if (hasLink) indicators.push("Suspicious Link or External Redirect");
-    if (hasOTP) indicators.push("Credential/OTP Request Pattern");
-    if (hasMoney) indicators.push("Financial Incentive/Claim Lure");
-
-    if (hasLink && hasOTP && (lower.includes("icici") || lower.includes("sbi") || lower.includes("hdfc") || lower.includes("bank") || lower.includes("card"))) {
-      risk = "High";
-      type = "Banking Scam";
-      explanation = "This message matches indicators of a high-risk banking takeover attempt. It requests credentials/OTPs using domain links that do not match the official bank address.";
-    } else if (hasJob && (hasMoney || hasLink)) {
-      risk = "High";
-      type = "Job Scam";
-      explanation = "This message is classified as a part-time job scam. It promises high daily payouts for minimal work and redirects to informal channels (like Telegram/WhatsApp) to hide the scanner's identity.";
-    } else if (hasCourier && (hasLink || hasMoney)) {
-      risk = "High";
-      type = "Delivery Scam";
-      explanation = "This is a delivery clearing scam. Attackers claim a parcel is held for minor customs fees to harvest credit card information on their fake processing site.";
-    } else if (hasMoney && lower.includes("invest") && lower.includes("double")) {
-      risk = "High";
-      type = "Investment Fraud";
-      explanation = "This is an investment double-your-money scam. High guaranteed yields within days are mathematically impossible and represent classic Ponzi schemes.";
-    } else if (hasOTP && hasUrgency) {
-      risk = "High";
-      type = "OTP Scam";
-      explanation = "A caller or message is prompting you to disclose an OTP code immediately. Genuine agencies never ask for OTPs to troubleshoot account issues.";
-    } else if (indicators.length >= 2) {
-      risk = "Medium";
-      type = "Suspicious Message";
-      explanation = "This text contains multiple suspicious flags like link redirects and time limits. Check the sender details carefully before engaging.";
-    } else if (indicators.length === 0) {
-      risk = "Safe";
-      type = "Legitimate Notification";
-      explanation = "No standard threat patterns were detected. This message appears informational. Remember, never click links unless you verify the sender.";
-    } else {
-      risk = "Low";
-      type = "General Notification";
-      explanation = "Low threat presence. Simple informational post containing standard expressions. Review details carefully if links are added later.";
-    }
-
-    return {
-      text,
-      type,
-      risk,
-      indicators: indicators.length > 0 ? indicators : ["None detected"],
-      explanation
-    };
   };
 
   const handleAnalyze = async () => {
@@ -89,37 +47,54 @@ export default function MessageAnalyzer() {
     setError(null);
     setResult(null);
 
-    // Simulate scanning delay for visual premium effect
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    const apiKey = localStorage.getItem('cybershield_gemini_key');
-    if (apiKey) {
+    try {
+      let response;
       try {
-        const aiResult = await analyzeMessageWithGemini(inputText, apiKey);
-        setResult(aiResult);
-        
-        // Save stats
-        if (aiResult.risk === 'High' || aiResult.risk === 'Medium') {
-          const totalScams = parseInt(localStorage.getItem('cybershield_scams_detected') || '0', 10);
-          localStorage.setItem('cybershield_scams_detected', (totalScams + 1).toString());
-        }
-      } catch (err) {
-        console.warn("Gemini API call failed, falling back to local analysis", err);
-        const localResult = runLocalHeuristics(inputText);
-        setResult(localResult);
+        response = await fetch('http://localhost:8000/analyze-message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: inputText })
+        });
+      } catch (e) {
+        // Fallback relative path
+        response = await fetch('/analyze-message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: inputText })
+        });
       }
-    } else {
-      // Local Heuristic parsing
-      const localResult = runLocalHeuristics(inputText);
-      setResult(localResult);
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const parsedJson = parseJSONFromText(data.analysis);
+
+      const mappedResult = {
+        type: parsedJson.scam_type || "Unknown Threat",
+        risk: parsedJson.risk || "Medium",
+        indicators: parsedJson.red_flags || ["Suspect pattern"],
+        explanation: parsedJson.recommendation || "Verify sender authenticity before clicking links or disclosing credentials."
+      };
+
+      setResult(mappedResult);
       
       // Save stats
-      if (localResult.risk === 'High' || localResult.risk === 'Medium') {
+      if (mappedResult.risk === 'High' || mappedResult.risk === 'Medium') {
         const totalScams = parseInt(localStorage.getItem('cybershield_scams_detected') || '0', 10);
         localStorage.setItem('cybershield_scams_detected', (totalScams + 1).toString());
       }
+    } catch (err) {
+      console.error("Message scan failed", err);
+      setError("Failed to connect to the backend API. Please make sure the FastAPI server is running on http://localhost:8000.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const selectSample = (sample) => {
@@ -246,7 +221,7 @@ export default function MessageAnalyzer() {
               <div className="mt-8 pt-4 border-t border-cyber-border/40">
                 <div className="bg-cyber-black/40 border border-cyber-border/30 p-3.5 rounded-lg text-xs">
                   <div className="font-semibold text-white flex items-center gap-1.5 mb-1">
-                    🛡️ CyberShield Advisory
+                    🛡️ ShieldUp Advisory
                   </div>
                   <ul className="list-disc pl-4 space-y-1 text-gray-400 text-[11px]">
                     {result.risk === 'High' || result.risk === 'Medium' ? (

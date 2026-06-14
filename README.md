@@ -354,7 +354,7 @@ POST /simulate-scam
 
 ## 🎯 Hackathon Demo Flow
 
-### Step 1 — Scam Message Detection
+### Step 1 - Scam Message Detection
 
 Paste a suspicious message.
 
@@ -368,7 +368,7 @@ Risk level and scam indicators are displayed.
 
 ---
 
-### Step 2 — Screenshot Analysis
+### Step 2 - Screenshot Analysis
 
 Upload a suspicious screenshot.
 
@@ -382,7 +382,7 @@ Threat assessment is generated.
 
 ---
 
-### Step 3 — URL Scanning
+### Step 3 - URL Scanning
 
 Enter a suspicious link.
 
@@ -396,7 +396,7 @@ Safety recommendation is displayed.
 
 ---
 
-### Step 4 — Scam Simulator
+### Step 4 - Scam Simulator
 
 Choose a scam scenario.
 
@@ -440,6 +440,7 @@ ShieldUp aims to make cybersecurity accessible to everyone by combining AI-power
 
 The goal is not only to identify threats but also to help users build the skills needed to stay safe online.
 
+## SAVDHAAN RAHE . SATARK RAHE . JAI HIND 
 ---
 
 ## 📄 License

@@ -192,7 +192,6 @@ ShieldUp/
 
 ---
 
-## 🛠️ Tech Stack
 
 ## 🛠️ Tech Stack
 

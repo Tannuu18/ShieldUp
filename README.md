@@ -194,23 +194,26 @@ ShieldUp/
 
 ## 🛠️ Tech Stack
 
-### Frontend
+## 🛠️ Tech Stack
 
-* React.js
-* Tailwind CSS
-* Axios
-* React Router
+### Frontend
+- React.js
+- Vite
+- Tailwind CSS
+- Lucide React
 
 ### Backend
+- Python
+- FastAPI
+- Uvicorn
+- Pydantic
 
-* FastAPI
-* Python
-* Uvicorn
-* Pydantic
+### AI & Machine Learning
+- Google Gemini API
 
-### AI
-
-* Google Gemini API
+### Utilities
+- Python Dotenv
+- Requests
 
 ---
 

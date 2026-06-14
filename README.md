@@ -157,38 +157,37 @@ Users learn to:
 ```text
 ShieldUp/
 │
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   │
-│   ├── package.json
-│   └── tailwind.config.js
-│
 ├── backend/
 │   ├── app/
-│   │   ├── main.py
 │   │   ├── routes/
 │   │   ├── services/
 │   │   ├── models/
-│   │   └── database/
+│   │   ├── database/
+│   │   └── main.py
 │   │
+│   ├── uploads/
+│   ├── .env
 │   ├── requirements.txt
-│   └── .env
+│   └── test.py
 │
-├── ai/
-│   ├── prompts/
-│   └── datasets/
+├── frontend_2.0/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── utils/
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
+│   │
+│   ├── index.html
+│   ├── package.json
+│   ├── tailwind.config.js
+│   ├── vite.config.js
+│   └── README.md
 │
-├── docs/
-│
-├── README.md
-└── .gitignore
+├── .gitignore
+└── README.md
 ```
 
 ---

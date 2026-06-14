@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from './Shared/Card';
 import Button from './Shared/Button';
-import { HEALTH_QUIZ } from '../mockData';
+import { HEALTH_QUIZ } from '../utils/mockData';
 import { ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function HealthAdvisor() {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Card from './Shared/Card';
-import { ACHIEVEMENTS } from '../mockData';
+import { ACHIEVEMENTS } from '../utils/mockData';
 import { Award, Flame, Target, Trophy, Lock } from 'lucide-react';
 
 export default function Achievements() {

@@ -7,37 +7,20 @@ export default function QRCodeScanner() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [presetActive, setPresetActive] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const presets = [
     {
       id: "paytm-cashback",
       title: "Fake Paytm Cashback reward QR",
       description: "Found on a social media group claiming to award ₹2000 instant cashback.",
-      decodedUrl: "http://paytm-rewards-claim.xyz/cashback-payout?amount=2000",
-      riskScore: 89,
-      redirects: [
-        "http://paytm-rewards-claim.xyz/cashback-payout",
-        "http://unsecure-payout-auth.com/verification"
-      ],
-      reasons: [
-        "Attempts to mimic official Paytm cashback but resolves on .xyz domain.",
-        "Contains direct query parameters attempting to force UPI link trigger.",
-        "Redirects traffic immediately to an unsecure credentials relay portal."
-      ]
+      decodedUrl: "http://paytm-rewards-claim.xyz/cashback-payout?amount=2000"
     },
     {
       id: "parking-ticket",
       title: "Public Parking QR Code",
       description: "Pasted on a roadside parking meter asking to scan and pay fee.",
-      decodedUrl: "http://quick-parking-meter-pay.cc/meter-201",
-      riskScore: 78,
-      redirects: [
-        "http://quick-parking-meter-pay.cc/meter-201"
-      ],
-      reasons: [
-        "Uses a high-risk registry domain (.cc).",
-        "Domain registration is only 5 days old, indicating a fresh malicious sticker campaign."
-      ]
+      decodedUrl: "http://quick-parking-meter-pay.cc/meter-201"
     }
   ];
 
@@ -45,16 +28,47 @@ export default function QRCodeScanner() {
     setLoading(true);
     setPresetActive(preset.id);
     setResult(null);
+    setErrorMsg('');
 
-    // Simulate scanning camera focus and line decoder
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    try {
+      let response;
+      try {
+        response = await fetch('http://localhost:8000/scan-qr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: preset.decodedUrl })
+        });
+      } catch (e) {
+        // Fallback relative path
+        response = await fetch('/scan-qr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: preset.decodedUrl })
+        });
+      }
 
-    setResult(preset);
-    setLoading(false);
-    
-    // Increment scams detected
-    const totalScams = parseInt(localStorage.getItem('cybershield_scams_detected') || '0', 10);
-    localStorage.setItem('cybershield_scams_detected', (totalScams + 1).toString());
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setResult(data.analysis);
+      
+      // Increment stats
+      if (data.analysis.riskScore >= 50) {
+        const totalScams = parseInt(localStorage.getItem('cybershield_scams_detected') || '0', 10);
+        localStorage.setItem('cybershield_scams_detected', (totalScams + 1).toString());
+      }
+    } catch (err) {
+      console.error("QR scan failed", err);
+      setErrorMsg("Failed to connect to the backend API. Please make sure the FastAPI server is running on http://localhost:8000.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getRiskStyles = (score) => {
@@ -133,6 +147,15 @@ export default function QRCodeScanner() {
 
         {/* Right Side: Scan Results Details */}
         <div className="lg:col-span-1">
+          {errorMsg && (
+            <Card className="border-cyber-red border-t-4 bg-cyber-red/10 p-5 space-y-3 mb-6">
+              <div className="flex items-center gap-2 text-cyber-red font-bold text-sm">
+                <ShieldAlert className="w-5 h-5 animate-pulse" /> Connection Failed
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed font-sans">{errorMsg}</p>
+            </Card>
+          )}
+
           {result ? (
             <Card className="h-full flex flex-col justify-between">
               <div className="space-y-6 animate-fadeIn">
@@ -196,15 +219,17 @@ export default function QRCodeScanner() {
               </div>
             </Card>
           ) : (
-            <Card className="h-full border-dashed border-cyber-border/60 flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
-              <div className="w-16 h-16 rounded-full bg-cyber-lightGray/50 border border-cyber-border/60 flex items-center justify-center text-gray-500 mb-4 animate-pulse">
-                <QrCode className="w-6 h-6 text-cyber-cyan" />
-              </div>
-              <h4 className="text-sm font-bold text-gray-300">Decoded Logs</h4>
-              <p className="text-xs text-gray-500 max-w-xs mt-1.5 leading-relaxed">
-                No active scan. Select a template on the left panel to scan the QR frame and trace its landing redirect tree.
-              </p>
-            </Card>
+            !errorMsg && (
+              <Card className="h-full border-dashed border-cyber-border/60 flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
+                <div className="w-16 h-16 rounded-full bg-cyber-lightGray/50 border border-cyber-border/60 flex items-center justify-center text-gray-500 mb-4 animate-pulse">
+                  <QrCode className="w-6 h-6 text-cyber-cyan" />
+                </div>
+                <h4 className="text-sm font-bold text-gray-300">Decoded Logs</h4>
+                <p className="text-xs text-gray-500 max-w-xs mt-1.5 leading-relaxed">
+                  No active scan. Select a template on the left panel to scan the QR frame and trace its landing redirect tree.
+                </p>
+              </Card>
+            )
           )}
         </div>
       </div>
